@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Basic Luhn algorithm validation
-    function luhnCheck(cardNumber: string): boolean {
+    const luhnCheck = (cardNumber: string): boolean => {
       let sum = 0
       let isEven = false
       
