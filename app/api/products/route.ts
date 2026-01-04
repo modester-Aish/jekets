@@ -37,10 +37,11 @@ function fetchProductsFromWooCommerce(page = 1, perPage = 100): Promise<any> {
         data += chunk
       })
       res.on('end', () => {
-        if (res.statusCode >= 200 && res.statusCode < 300) {
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
           try {
             const products = JSON.parse(data)
-            const totalPages = parseInt(res.headers['x-wp-totalpages'] || '1')
+            const totalPagesHeader = res.headers['x-wp-totalpages']
+            const totalPages = parseInt(Array.isArray(totalPagesHeader) ? totalPagesHeader[0] : totalPagesHeader || '1')
             resolve({ products, totalPages, currentPage: page })
           } catch (error) {
             reject(new Error('Failed to parse response'))
