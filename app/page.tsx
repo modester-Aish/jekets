@@ -35,19 +35,20 @@ export const metadata: Metadata = {
   },
 }
 
-export default function Home() {
+export default async function Home() {
   // Get Trapstar products by category for homepage sections (only categories with Trapstar products)
   // Order: Tracksuits (31), Jackets (27), Shorts (21), T-Shirts (9), Bags (7), Hoodies (2)
-  const tracksuits = getProductsByCategoryAndBrand('tracksuits', 'trapstar').slice(0, 8)
-  const jackets = getProductsByCategoryAndBrand('jackets', 'trapstar').slice(0, 8)
-  const shorts = getProductsByCategoryAndBrand('shorts', 'trapstar').slice(0, 8)
-  const tshirts = getProductsByCategoryAndBrand('t-shirts', 'trapstar').slice(0, 8)
-  const bags = getProductsByCategoryAndBrand('bags', 'trapstar').slice(0, 8)
-  const hoodies = getProductsByCategoryAndBrand('hoodies', 'trapstar').slice(0, 8)
+  const tracksuits = (await getProductsByCategoryAndBrand('tracksuits', 'trapstar')).slice(0, 8)
+  const jackets = (await getProductsByCategoryAndBrand('jackets', 'trapstar')).slice(0, 8)
+  const shorts = (await getProductsByCategoryAndBrand('shorts', 'trapstar')).slice(0, 8)
+  const tshirts = (await getProductsByCategoryAndBrand('t-shirts', 'trapstar')).slice(0, 8)
+  const bags = (await getProductsByCategoryAndBrand('bags', 'trapstar')).slice(0, 8)
+  const hoodies = (await getProductsByCategoryAndBrand('hoodies', 'trapstar')).slice(0, 8)
 
   return (
     <>
       {/* Hero Section - Promotional Banner */}
+      <h1 className="sr-only">Trapstar Official Store - Premium Streetwear Collection</h1>
       <section className="relative w-full bg-black border-b border-gray-900">
         <div className="relative w-full" style={{ height: '70vh', minHeight: '500px' }}>
           <Image

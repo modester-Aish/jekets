@@ -41,7 +41,7 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ')
 
-    const products = getProductsByCategoryAndBrand(slug, 'trapstar')
+    const products = await getProductsByCategoryAndBrand(slug, 'trapstar')
     const description = categoryDescriptions[slug] || `Shop premium ${categoryName.toLowerCase()} from Trapstar Official. Quality streetwear with bold designs.`
 
     return {
@@ -67,7 +67,7 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
   }
 
   // Check if it's a product
-  const product = getProductBySlug(slug)
+  const product = await getProductBySlug(slug)
   if (product) {
     const categoryName = product.category
       .split('-')
@@ -110,12 +110,12 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
   }
 }
 
-export default function CategoryPage({ params }: CategoryPageProps) {
+export default async function CategoryPage({ params }: CategoryPageProps) {
   const slug = params.category
 
   // Check if it's a valid category
   if (validCategories.includes(slug)) {
-    const trapstarProducts = getProductsByCategoryAndBrand(slug, 'trapstar')
+    const trapstarProducts = await getProductsByCategoryAndBrand(slug, 'trapstar')
     const categoryName = slug
       .split('-')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -173,7 +173,7 @@ export default function CategoryPage({ params }: CategoryPageProps) {
   }
 
   // Check if it's a product
-  const product = getProductBySlug(slug)
+  const product = await getProductBySlug(slug)
   if (product) {
     const discountPercent = product.discountPrice && product.price && product.price > 0
       ? Math.round(((product.price - product.discountPrice) / product.price) * 100)
@@ -183,7 +183,8 @@ export default function CategoryPage({ params }: CategoryPageProps) {
     const displayDiscountPrice = product.discountPrice || null
     const itemsSold = 5 + (product.id % 25)
     const peopleWatching = 3 + (product.id % 18)
-    const relatedProducts = getProductsByCategory(product.category)
+    const categoryProducts = await getProductsByCategory(product.category)
+    const relatedProducts = categoryProducts
       .filter(p => p.id !== product.id)
       .slice(0, 8)
     const categoryName = product.category
@@ -251,9 +252,20 @@ export default function CategoryPage({ params }: CategoryPageProps) {
             </div>
 
             {/* Buy Now Button */}
-            <button className="bg-white text-black px-8 py-4 font-semibold hover:bg-gray-200 transition-colors duration-200 mb-4 w-full">
-              Buy Now
-            </button>
+            {product.externalUrl ? (
+              <a
+                href={product.externalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-white text-black px-8 py-4 font-semibold hover:bg-gray-200 transition-colors duration-200 mb-4 w-full text-center block"
+              >
+                {product.buttonText || 'Buy Now'}
+              </a>
+            ) : (
+              <button className="bg-white text-black px-8 py-4 font-semibold hover:bg-gray-200 transition-colors duration-200 mb-4 w-full">
+                {product.buttonText || 'Buy Now'}
+              </button>
+            )}
 
             {/* Social Proof */}
             <div className="mb-6 text-sm text-gray-400">

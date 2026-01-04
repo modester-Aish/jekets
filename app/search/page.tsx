@@ -2,7 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { searchProducts } from '@/lib/products'
+import { searchProductsSync } from '@/lib/products'
 import ProductGrid from '@/components/ProductGrid'
 import type { Product } from '@/lib/products'
 
@@ -12,12 +12,26 @@ function SearchContent() {
   const [products, setProducts] = useState<Product[]>([])
 
   useEffect(() => {
-    if (query) {
-      const results = searchProducts(query)
-      setProducts(results)
-    } else {
-      setProducts([])
+    async function fetchAndSearch() {
+      if (query) {
+        try {
+          const response = await fetch('/api/products')
+          const allProducts = await response.json()
+          const results = allProducts.filter((product: Product) =>
+            product.title.toLowerCase().includes(query.toLowerCase())
+          )
+          setProducts(results)
+        } catch (error) {
+          console.error('Error fetching products:', error)
+          // Fallback to sync search
+          const results = searchProductsSync(query)
+          setProducts(results)
+        }
+      } else {
+        setProducts([])
+      }
     }
+    fetchAndSearch()
   }, [query])
 
   return (

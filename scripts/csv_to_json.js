@@ -237,7 +237,9 @@ for (let i = 1; i < lines.length; i++) {
         discountPrice: discountPrice,
         image: imagePath,
         description: row.description || title,
-        brand: 'Trapstar'
+        brand: 'Trapstar',
+        externalUrl: row.product_url || row.external_url || '',
+        buttonText: 'Buy Now'
       };
       
       products.push(product);

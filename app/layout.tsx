@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import BackToTop from '@/components/BackToTop'
+import StructuredData from '@/components/StructuredData'
 
 export const metadata: Metadata = {
   title: {
@@ -65,11 +67,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
+        <StructuredData />
         <Navbar />
         <main className="min-h-screen">
           {children}
         </main>
         <Footer />
+        <BackToTop />
       </body>
     </html>
   )

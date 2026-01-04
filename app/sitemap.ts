@@ -3,7 +3,7 @@ import { getAllProducts } from '@/lib/products'
 
 const validCategories = ['hoodies', 't-shirts', 'tracksuits', 'sweatpants', 'shorts', 'jackets', 'jeans', 'beanies', 'hats', 'ski-masks', 'long-sleeves', 'sweaters', 'pants', 'bags', 'collaborations']
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = 'https://trapstarofficial.store'
   
   // Static pages
@@ -49,7 +49,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   }))
 
   // Product pages
-  const products = getAllProducts()
+  const products = await getAllProducts()
   const productPages: MetadataRoute.Sitemap = products.map((product) => ({
     url: `${baseUrl}/${product.slug}`,
     lastModified: new Date(),

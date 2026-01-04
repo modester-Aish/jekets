@@ -23,8 +23,8 @@ export const metadata: Metadata = {
   },
 }
 
-export default function StorePage() {
-  const allProducts = getAllProducts()
+export default async function StorePage() {
+  const allProducts = await getAllProducts()
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
