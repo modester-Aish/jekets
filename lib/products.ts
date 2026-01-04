@@ -1,4 +1,5 @@
 import productsData from '@/data/products.json'
+import { getCachedProducts, saveProductsToCache } from './cache'
 
 export interface Product {
   id: number
@@ -144,14 +145,27 @@ async function fetchProductsFromWooCommerceDirect(): Promise<Product[]> {
   })
 }
 
-// Get all products - fetches directly from WooCommerce (always fresh, no cache)
+// Get all products - uses cache first, then fetches from WooCommerce
 export async function getAllProducts(): Promise<Product[]> {
+  // Try to get from cache first
+  const cachedProducts = getCachedProducts()
+  if (cachedProducts) {
+    return cachedProducts
+  }
+
+  // Cache miss or expired - fetch from WooCommerce
   try {
-    return await fetchProductsFromWooCommerceDirect()
+    const products = await fetchProductsFromWooCommerceDirect()
+    // Save to cache for next time
+    saveProductsToCache(products)
+    return products
   } catch (error) {
     console.error('Error fetching from WooCommerce, using fallback:', error)
     // Fallback to local data
-    return productsData as Product[]
+    const fallbackProducts = productsData as Product[]
+    // Save fallback to cache so we don't keep trying
+    saveProductsToCache(fallbackProducts)
+    return fallbackProducts
   }
 }
 

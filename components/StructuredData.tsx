@@ -1,5 +1,3 @@
-import Script from 'next/script'
-
 export default function StructuredData() {
   const siteNavigationSchema = {
     '@context': 'https://schema.org',
@@ -51,10 +49,8 @@ export default function StructuredData() {
   }
 
   return (
-    <Script
-      id="site-navigation-schema"
+    <script
       type="application/ld+json"
-      strategy="afterInteractive"
       dangerouslySetInnerHTML={{
         __html: JSON.stringify(siteNavigationSchema),
       }}
