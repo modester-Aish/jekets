@@ -3,6 +3,7 @@ import ProductGrid from '@/components/ProductGrid'
 import ProductDetailTabs from '@/components/ProductDetailTabs'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
+import Link from 'next/link'
 
 interface CategoryPageProps {
   params: {
@@ -252,20 +253,12 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
             </div>
 
             {/* Buy Now Button */}
-            {product.externalUrl ? (
-              <a
-                href={product.externalUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-white text-black px-8 py-4 font-semibold hover:bg-gray-200 transition-colors duration-200 mb-4 w-full text-center block"
-              >
-                {product.buttonText || 'Buy Now'}
-              </a>
-            ) : (
-              <button className="bg-white text-black px-8 py-4 font-semibold hover:bg-gray-200 transition-colors duration-200 mb-4 w-full">
-                {product.buttonText || 'Buy Now'}
-              </button>
-            )}
+            <Link
+              href={`/checkout?product=${product.slug}`}
+              className="bg-white text-black px-8 py-4 font-semibold hover:bg-gray-200 transition-colors duration-200 mb-4 w-full text-center block"
+            >
+              {product.buttonText || 'Buy Now'}
+            </Link>
 
             {/* Social Proof */}
             <div className="mb-6 text-sm text-gray-400">
