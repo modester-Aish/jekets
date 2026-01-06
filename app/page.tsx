@@ -1,8 +1,12 @@
-import { getProductsByCategoryAndBrand } from '@/lib/products'
+import { getAllProducts } from '@/lib/products'
 import ProductGrid from '@/components/ProductGrid'
 import Image from 'next/image'
 import Link from 'next/link'
 import type { Metadata } from 'next'
+
+// Force dynamic rendering - always fetch fresh data from WooCommerce
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export const metadata: Metadata = {
   title: 'Trapstar Official Store - Premium Streetwear Collection | trapstarofficial.store',
@@ -36,14 +40,16 @@ export const metadata: Metadata = {
 }
 
 export default async function Home() {
-  // Get Trapstar products by category for homepage sections (only categories with Trapstar products)
-  // Order: Tracksuits (31), Jackets (27), Shorts (21), T-Shirts (9), Bags (7), Hoodies (2)
-  const tracksuits = (await getProductsByCategoryAndBrand('tracksuits', 'trapstar')).slice(0, 8)
-  const jackets = (await getProductsByCategoryAndBrand('jackets', 'trapstar')).slice(0, 8)
-  const shorts = (await getProductsByCategoryAndBrand('shorts', 'trapstar')).slice(0, 8)
-  const tshirts = (await getProductsByCategoryAndBrand('t-shirts', 'trapstar')).slice(0, 8)
-  const bags = (await getProductsByCategoryAndBrand('bags', 'trapstar')).slice(0, 8)
-  const hoodies = (await getProductsByCategoryAndBrand('hoodies', 'trapstar')).slice(0, 8)
+  // Fetch all products ONCE and filter by category (prevents multiple parallel requests)
+  const allProducts = await getAllProducts()
+  
+  // Filter by category from the single fetch
+  const tracksuits = allProducts.filter(p => p.category === 'tracksuits').slice(0, 8)
+  const jackets = allProducts.filter(p => p.category === 'jackets').slice(0, 8)
+  const shorts = allProducts.filter(p => p.category === 'shorts').slice(0, 8)
+  const tshirts = allProducts.filter(p => p.category === 't-shirts').slice(0, 8)
+  const bags = allProducts.filter(p => p.category === 'bags').slice(0, 8)
+  const hoodies = allProducts.filter(p => p.category === 'hoodies').slice(0, 8)
 
   return (
     <>

@@ -1,14 +1,21 @@
-import { getProductsByCategory, getProductsByCategoryAndBrand, getProductBySlug, getAllProducts } from '@/lib/products'
+import { getAllProducts, getProductBySlug } from '@/lib/products'
 import ProductGrid from '@/components/ProductGrid'
 import ProductDetailTabs from '@/components/ProductDetailTabs'
+import Pagination from '@/components/Pagination'
+import PriceDisplay from '@/components/PriceDisplay'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import Link from 'next/link'
+
+// Force dynamic rendering - always fetch fresh data from WooCommerce
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 interface CategoryPageProps {
   params: {
     category: string
   }
+  searchParams: { page?: string }
 }
 
 const validCategories = ['hoodies', 't-shirts', 'tracksuits', 'sweatpants', 'shorts', 'jackets', 'jeans', 'beanies', 'hats', 'ski-masks', 'long-sleeves', 'sweaters', 'pants', 'bags', 'collaborations']
@@ -35,6 +42,9 @@ const categoryDescriptions: Record<string, string> = {
 export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
   const slug = params.category
   
+  // Fetch all products once for metadata (prevents multiple requests)
+  const allProducts = await getAllProducts()
+  
   // Check if it's a valid category
   if (validCategories.includes(slug)) {
     const categoryName = slug
@@ -42,7 +52,7 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ')
 
-    const products = await getProductsByCategoryAndBrand(slug, 'trapstar')
+    const products = allProducts.filter(p => p.category === slug)
     const description = categoryDescriptions[slug] || `Shop premium ${categoryName.toLowerCase()} from Trapstar Official. Quality streetwear with bold designs.`
 
     return {
@@ -68,7 +78,7 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
   }
 
   // Check if it's a product
-  const product = await getProductBySlug(slug)
+  const product = allProducts.find(p => p.slug === slug)
   if (product) {
     const categoryName = product.category
       .split('-')
@@ -111,12 +121,42 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
   }
 }
 
-export default async function CategoryPage({ params }: CategoryPageProps) {
+export default async function CategoryPage({ params, searchParams }: CategoryPageProps) {
   const slug = params.category
+  const currentPage = parseInt(searchParams.page || '1')
+  const perPage = 12
+
+  // Fetch all products ONCE (same as homepage) - uses cache
+  // This is needed for both category pages and product pages
+  const allProducts = await getAllProducts()
+  
+  // Debug: Log if products are empty
+  if (allProducts.length === 0) {
+    console.warn(`⚠️  No products found. Slug: ${slug}`)
+    console.warn(`⚠️  This might be due to WooCommerce API being unavailable (502 error). Check WooCommerce server status.`)
+  }
 
   // Check if it's a valid category
   if (validCategories.includes(slug)) {
-    const trapstarProducts = await getProductsByCategoryAndBrand(slug, 'trapstar')
+    // Filter by category
+    const categoryProducts = allProducts.filter(p => p.category === slug)
+    
+    // Pagination logic
+    const totalProducts = categoryProducts.length
+    const totalPages = Math.ceil(totalProducts / perPage)
+    const startIndex = (currentPage - 1) * perPage
+    const endIndex = startIndex + perPage
+    const trapstarProducts = categoryProducts.slice(startIndex, endIndex)
+    
+    const pagination = {
+      page: currentPage,
+      perPage,
+      totalProducts,
+      totalPages,
+      hasNextPage: currentPage < totalPages,
+      hasPrevPage: currentPage > 1
+    }
+    
     const categoryName = slug
       .split('-')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
@@ -127,19 +167,34 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
         <div className="mb-8 md:mb-12">
           <h1 className="text-3xl md:text-4xl font-bold text-white mb-3 md:mb-4">{categoryName}</h1>
-          <p className="text-gray-400 mb-3 md:mb-6 text-sm md:text-base">{trapstarProducts.length} products available</p>
+          <p className="text-gray-400 mb-3 md:mb-6 text-sm md:text-base">
+            {totalProducts > 0 ? `${totalProducts} products available` : 'No products available'}
+          </p>
         </div>
 
         {/* Trapstar Products Section */}
-        {trapstarProducts.length > 0 && (
-          <section className="mb-16 md:mb-20">
-            <ProductGrid products={trapstarProducts} />
-            {description && (
-              <div className="mt-8">
-                <p className="text-gray-400 max-w-3xl text-sm md:text-base leading-relaxed">{description}</p>
-              </div>
-            )}
-          </section>
+        {trapstarProducts.length > 0 ? (
+          <>
+            <section className="mb-16 md:mb-20">
+              <ProductGrid products={trapstarProducts} />
+              {description && (
+                <div className="mt-8">
+                  <p className="text-gray-400 max-w-3xl text-sm md:text-base leading-relaxed">{description}</p>
+                </div>
+              )}
+            </section>
+            
+            {/* Pagination */}
+            <Pagination
+              currentPage={pagination.page}
+              totalPages={pagination.totalPages}
+              basePath={`/${slug}`}
+            />
+          </>
+        ) : (
+          <div className="text-center py-20">
+            <p className="text-gray-400 text-lg">No products found in this category.</p>
+          </div>
         )}
 
         {/* Structured Data - CollectionPage */}
@@ -154,7 +209,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
               url: `https://trapstarofficial.store/${slug}`,
               mainEntity: {
                 '@type': 'ItemList',
-                numberOfItems: trapstarProducts.length,
+                numberOfItems: totalProducts,
                 itemListElement: trapstarProducts.slice(0, 10).map((product, index) => ({
                   '@type': 'ListItem',
                   position: index + 1,
@@ -174,7 +229,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
   }
 
   // Check if it's a product
-  const product = await getProductBySlug(slug)
+  const product = allProducts.find(p => p.slug === slug)
   if (product) {
     const discountPercent = product.discountPrice && product.price && product.price > 0
       ? Math.round(((product.price - product.discountPrice) / product.price) * 100)
@@ -184,9 +239,9 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
     const displayDiscountPrice = product.discountPrice || null
     const itemsSold = 5 + (product.id % 25)
     const peopleWatching = 3 + (product.id % 18)
-    const categoryProducts = await getProductsByCategory(product.category)
-    const relatedProducts = categoryProducts
-      .filter(p => p.id !== product.id)
+    // Use already fetched products instead of another call
+    const relatedProducts = allProducts
+      .filter(p => p.category === product.category && p.id !== product.id)
       .slice(0, 8)
     const categoryName = product.category
       .split('-')
@@ -214,7 +269,12 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
             <div className="mb-4">
               {displayDiscountPrice ? (
                 <div className="flex items-center space-x-3 mb-2">
-                  <span className="text-2xl md:text-3xl font-bold text-white">${displayDiscountPrice.toFixed(2)}</span>
+                  <PriceDisplay 
+                    price={product.price} 
+                    discountPrice={product.discountPrice}
+                    className="text-2xl md:text-3xl font-bold text-white"
+                    discountClassName="text-gray-500 text-sm"
+                  />
                   {discountPercent && (
                     <span className="bg-red-600 text-white px-2 py-1 text-xs font-bold">
                       -{discountPercent}%
@@ -222,13 +282,19 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
                   )}
                 </div>
               ) : (
-                <span className="text-2xl md:text-3xl font-bold text-white">${displayPrice.toFixed(2)}</span>
+                <PriceDisplay 
+                  price={product.price}
+                  className="text-2xl md:text-3xl font-bold text-white"
+                />
               )}
               {displayDiscountPrice && displayPrice > 0 && (
-                <div className="text-gray-500 text-sm">
-                  <span className="line-through">${displayPrice.toFixed(2)}</span>
-                  <span className="ml-2">Original price was: ${displayPrice.toFixed(2)}.</span>
-                  <span className="text-white ml-1">${displayDiscountPrice.toFixed(2)} Current price is: ${displayDiscountPrice.toFixed(2)}.</span>
+                <div className="text-gray-500 text-sm mt-2">
+                  <PriceDisplay 
+                    price={product.price} 
+                    discountPrice={product.discountPrice}
+                    className="text-white"
+                    discountClassName="line-through text-gray-500"
+                  />
                 </div>
               )}
             </div>
@@ -367,6 +433,7 @@ export default async function CategoryPage({ params }: CategoryPageProps) {
   }
 
   // Not a category or product
+  console.warn(`❌ Page not found - Slug: ${slug}, Valid categories: ${validCategories.join(', ')}, Products count: ${allProducts.length}`)
   notFound()
 }
 

@@ -1,6 +1,8 @@
 'use client'
 
 import Link from 'next/link'
+import { useState, useEffect } from 'react'
+import { convertPrice, formatPrice, getCurrencyInfo } from '@/lib/currency'
 
 interface Product {
   id: number
@@ -19,13 +21,41 @@ interface ProductCardProps {
 }
 
 export default function ProductCard({ product }: ProductCardProps) {
+  const [currency, setCurrency] = useState('USD')
+  const [countryCode, setCountryCode] = useState('US')
+
+  // Listen for currency changes
+  useEffect(() => {
+    const saved = localStorage.getItem('selectedCountry')
+    if (saved) {
+      setCountryCode(saved)
+      const country = require('@/lib/currency').COUNTRIES.find((c: any) => c.code === saved)
+      if (country) {
+        setCurrency(country.currency)
+      }
+    }
+
+    const handleCurrencyChange = (e: CustomEvent) => {
+      setCurrency(e.detail.currency)
+      setCountryCode(e.detail.countryCode)
+    }
+
+    window.addEventListener('currencyChanged', handleCurrencyChange as EventListener)
+    return () => window.removeEventListener('currencyChanged', handleCurrencyChange as EventListener)
+  }, [])
+
   // Ensure prices are valid numbers
-  const displayPrice = product.price || 0
-  const displayDiscountPrice = product.discountPrice || null
+  const basePrice = product.price || 0
+  const baseDiscountPrice = product.discountPrice || null
+  
+  // Convert prices to selected currency
+  const currencyInfo = getCurrencyInfo(countryCode)
+  const displayPrice = convertPrice(basePrice, 'USD', currencyInfo.code)
+  const displayDiscountPrice = baseDiscountPrice ? convertPrice(baseDiscountPrice, 'USD', currencyInfo.code) : null
   
   // Calculate discount percentage
-  const discountPercent = displayDiscountPrice && displayPrice > 0
-    ? Math.round(((displayPrice - displayDiscountPrice) / displayPrice) * 100)
+  const discountPercent = displayDiscountPrice && basePrice > 0
+    ? Math.round(((basePrice - (baseDiscountPrice || 0)) / basePrice) * 100)
     : null
 
   return (
@@ -61,11 +91,17 @@ export default function ProductCard({ product }: ProductCardProps) {
           <div className="flex items-center space-x-2">
             {displayDiscountPrice ? (
               <>
-                <span className="text-white font-semibold text-sm md:text-base">${displayDiscountPrice.toFixed(2)}</span>
-                <span className="text-gray-500 line-through text-xs md:text-sm">${displayPrice.toFixed(2)}</span>
+                <span className="text-white font-semibold text-sm md:text-base">
+                  {formatPrice(displayDiscountPrice, currencyInfo.code, currencyInfo.symbol)}
+                </span>
+                <span className="text-gray-500 line-through text-xs md:text-sm">
+                  {formatPrice(displayPrice, currencyInfo.code, currencyInfo.symbol)}
+                </span>
               </>
             ) : (
-              <span className="text-white font-semibold text-sm md:text-base">${displayPrice.toFixed(2)}</span>
+              <span className="text-white font-semibold text-sm md:text-base">
+                {formatPrice(displayPrice, currencyInfo.code, currencyInfo.symbol)}
+              </span>
             )}
           </div>
         </div>

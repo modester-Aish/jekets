@@ -1,6 +1,11 @@
 import { getAllProducts } from '@/lib/products'
 import ProductGrid from '@/components/ProductGrid'
+import Pagination from '@/components/Pagination'
 import type { Metadata } from 'next'
+
+// Force dynamic rendering - always fetch fresh data from WooCommerce
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export const metadata: Metadata = {
   title: 'Shop All Trapstar Products | Complete Collection | trapstarofficial.store',
@@ -23,24 +28,62 @@ export const metadata: Metadata = {
   },
 }
 
-export default async function StorePage() {
+interface StorePageProps {
+  searchParams: { page?: string }
+}
+
+export default async function StorePage({ searchParams }: StorePageProps) {
+  // Fetch all products ONCE (same as homepage) - uses cache
   const allProducts = await getAllProducts()
+  
+  // Pagination logic
+  const currentPage = parseInt(searchParams.page || '1')
+  const perPage = 12
+  const totalProducts = allProducts.length
+  const totalPages = Math.ceil(totalProducts / perPage)
+  const startIndex = (currentPage - 1) * perPage
+  const endIndex = startIndex + perPage
+  const products = allProducts.slice(startIndex, endIndex)
+  
+  const pagination = {
+    page: currentPage,
+    perPage,
+    totalProducts,
+    totalPages,
+    hasNextPage: currentPage < totalPages,
+    hasPrevPage: currentPage > 1
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
       <div className="mb-8 md:mb-12">
         <h1 className="text-3xl md:text-4xl font-bold text-white mb-3 md:mb-4">Shop</h1>
-        <p className="text-gray-400 mb-4 md:mb-6 text-sm md:text-base">Browse our complete Trapstar collection</p>
+        <p className="text-gray-400 mb-4 md:mb-6 text-sm md:text-base">
+          Browse our complete Trapstar collection
+          {pagination.totalProducts > 0 && (
+            <span className="ml-2">({pagination.totalProducts} products available)</span>
+          )}
+        </p>
       </div>
 
       {/* Trapstar Products Section */}
-      {allProducts.length > 0 && (
-        <section className="mb-16 md:mb-20">
-          <div className="mb-6 md:mb-8">
-            <p className="text-gray-400 mb-4 text-sm md:text-base">{allProducts.length} products available</p>
-          </div>
-          <ProductGrid products={allProducts} />
-        </section>
+      {products.length > 0 ? (
+        <>
+          <section className="mb-16 md:mb-20">
+            <ProductGrid products={products} />
+          </section>
+          
+          {/* Pagination */}
+          <Pagination
+            currentPage={pagination.page}
+            totalPages={pagination.totalPages}
+            basePath="/store"
+          />
+        </>
+      ) : (
+        <div className="text-center py-20">
+          <p className="text-gray-400 text-lg">No products found.</p>
+        </div>
       )}
       
       {/* Content Section - After Products */}
@@ -67,8 +110,8 @@ export default async function StorePage() {
             url: 'https://trapstarofficial.store/store',
             mainEntity: {
               '@type': 'ItemList',
-              numberOfItems: allProducts.length,
-              itemListElement: allProducts.slice(0, 20).map((product, index) => ({
+              numberOfItems: pagination.totalProducts,
+              itemListElement: products.slice(0, 20).map((product, index) => ({
                 '@type': 'ListItem',
                 position: index + 1,
                 item: {
