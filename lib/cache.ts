@@ -5,11 +5,12 @@ import { Product } from './products'
 import fs from 'fs'
 import path from 'path'
 
-// Cache duration: 1 hour (3600000 ms) - products will be cached until webhook invalidates
-export const CACHE_DURATION = 60 * 60 * 1000 // 1 hour
+// Cache duration: UNLIMITED - products will be cached until webhook invalidates
+// Only webhook can invalidate cache, not time-based expiration
+export const CACHE_DURATION = Infinity // Never expire - only webhook invalidates
 
 // Extended cache duration when server errors occur (502, 503, 504)
-const EXTENDED_CACHE_DURATION = 4 * 60 * 60 * 1000 // 4 hours when server is down
+const EXTENDED_CACHE_DURATION = Infinity // Never expire
 
 interface CacheData {
   products: Product[]
@@ -22,8 +23,9 @@ let memoryCache: CacheData | null = null
 // Flag to force cache refresh (set by webhook)
 let forceRefresh = false
 
-// File-based cache path (persists across hot reloads)
-const CACHE_FILE_PATH = path.join(process.cwd(), '.next', 'products-cache.json')
+// File-based cache path (persists across server restarts)
+// Use root data folder instead of .next (which gets cleaned)
+const CACHE_FILE_PATH = path.join(process.cwd(), 'data', 'products-cache.json')
 
 // Load cache from file on module load
 function loadCacheFromFile(): CacheData | null {
@@ -39,23 +41,11 @@ function loadCacheFromFile(): CacheData | null {
     const fileContent = fs.readFileSync(CACHE_FILE_PATH, 'utf-8')
     const cacheData: CacheData = JSON.parse(fileContent)
     
+    // Cache never expires - only webhook can invalidate
+    // Always use cached data if file exists
     const now = Date.now()
     const age = now - cacheData.timestamp
-
-    // Check if cache is still valid
-    if (age < CACHE_DURATION) {
-      console.log(`📂 Loaded cache from file (${cacheData.products.length} products, ${Math.round(age / 60000)} minutes old)`)
-      return cacheData
-    }
-
-    // Cache expired - delete file
-    if (age >= EXTENDED_CACHE_DURATION) {
-      fs.unlinkSync(CACHE_FILE_PATH)
-      return null
-    }
-
-    // Extended cache - still use it
-    console.log(`⚠️  File cache expired but using extended cache (${Math.round(age / 60000)} minutes old)`)
+    console.log(`📂 Loaded cache from file (${cacheData.products.length} products, ${Math.round(age / 60000)} minutes old) - Cache valid until webhook`)
     return cacheData
   } catch (error) {
     // If file read fails, return null (will fetch fresh)
@@ -75,17 +65,18 @@ function saveCacheToFile(products: Product[]): void {
       timestamp: Date.now(),
     }
 
-    // Ensure .next directory exists
+    // Ensure data directory exists (persists across server restarts)
     const cacheDir = path.dirname(CACHE_FILE_PATH)
     if (!fs.existsSync(cacheDir)) {
       fs.mkdirSync(cacheDir, { recursive: true })
+      console.log(`📁 Created data directory: ${cacheDir}`)
     }
 
-    fs.writeFileSync(CACHE_FILE_PATH, JSON.stringify(cacheData), 'utf-8')
-    console.log(`💾 Cache saved to file: ${CACHE_FILE_PATH}`)
+    fs.writeFileSync(CACHE_FILE_PATH, JSON.stringify(cacheData, null, 2), 'utf-8')
+    console.log(`💾 Cache saved to file: ${CACHE_FILE_PATH} (${products.length} products)`)
   } catch (error) {
     // If file write fails, continue with in-memory cache only
-    console.warn('⚠️  Failed to save cache to file, using in-memory cache only')
+    console.warn('⚠️  Failed to save cache to file, using in-memory cache only:', error)
   }
 }
 
@@ -119,21 +110,9 @@ export function getCachedProducts(): Product[] | null {
   }
 
   // First check in-memory cache
+  // Cache never expires - only webhook can invalidate
   if (memoryCache) {
-    const now = Date.now()
-    const age = now - memoryCache.timestamp
-
-    if (age < CACHE_DURATION) {
-      return memoryCache.products
-    }
-
-    if (age < EXTENDED_CACHE_DURATION) {
-      console.log(`⚠️  Memory cache expired but using extended cache (${Math.round(age / 60000)} minutes old)`)
-      return memoryCache.products
-    }
-
-    // Memory cache expired
-    memoryCache = null
+    return memoryCache.products
   }
 
   // If memory cache is empty, try loading from file
@@ -160,7 +139,7 @@ export function saveProductsToCache(products: Product[]): void {
   // Also save to file for persistence across hot reloads
   saveCacheToFile(products)
   
-  console.log(`💾 Products cached: ${products.length} products (cache valid for 1 hour or until webhook)`)
+  console.log(`💾 Products cached: ${products.length} products (cache valid until webhook - NEVER expires)`)
 }
 
 // Invalidate cache (called by webhook when products change)

@@ -8,7 +8,12 @@
     "start": "next start",
     "lint": "next lint",
     "scrape": "node scripts/scrape_websites_one_by_one.js",
-    "scrape-csv": "node scripts/scrape_to_csv.js"
+    "scrape-csv": "node scripts/scrape_to_csv.js",
+    "download-images": "node scripts/download_product_images.js",
+    "download-images-csv": "node scripts/download_images_from_csv.js",
+    "delete-products": "node scripts/delete_all_products.js",
+    "import-csv": "node scripts/import_merged_products.js",
+    "clear-cache": "node scripts/clear_cache.js"
   },
   "dependencies": {
     "axios": "^1.13.2",

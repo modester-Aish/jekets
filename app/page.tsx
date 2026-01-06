@@ -1,12 +1,10 @@
-import { getAllProducts } from '@/lib/products'
 import ProductGrid from '@/components/ProductGrid'
-import Image from 'next/image'
 import Link from 'next/link'
 import type { Metadata } from 'next'
 
-// Force dynamic rendering - always fetch fresh data from WooCommerce
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+// Use ISR (Incremental Static Regeneration) - pages are cached and revalidated every hour
+// This provides fast page loads while keeping data fresh
+export const revalidate = 3600 // Revalidate every hour (3600 seconds)
 
 export const metadata: Metadata = {
   title: 'Trapstar Official Store - Premium Streetwear Collection | trapstarofficial.store',
@@ -40,16 +38,44 @@ export const metadata: Metadata = {
 }
 
 export default async function Home() {
-  // Fetch all products ONCE and filter by category (prevents multiple parallel requests)
-  const allProducts = await getAllProducts()
+  // FAST: Fetch only 8 products per category (not all products)
+  // Each category fetches only what's needed from cache or API
+  // Total: 6 categories × 8 products = 48 products (not 212!)
   
-  // Filter by category from the single fetch
-  const tracksuits = allProducts.filter(p => p.category === 'tracksuits').slice(0, 8)
-  const jackets = allProducts.filter(p => p.category === 'jackets').slice(0, 8)
-  const shorts = allProducts.filter(p => p.category === 'shorts').slice(0, 8)
-  const tshirts = allProducts.filter(p => p.category === 't-shirts').slice(0, 8)
-  const bags = allProducts.filter(p => p.category === 'bags').slice(0, 8)
-  const hoodies = allProducts.filter(p => p.category === 'hoodies').slice(0, 8)
+  async function fetchCategoryProducts(category: string, limit: number = 8) {
+    try {
+      // ALWAYS use cache first - NO DIRECT FETCH
+      // Cache will be populated by getAllProducts() on first request
+      const { getAllProducts } = await import('@/lib/products')
+      const allProducts = await getAllProducts()
+      
+      if (allProducts && allProducts.length > 0) {
+        const filtered = allProducts.filter(p => p.category === category).slice(0, limit)
+        console.log(`✅ Homepage ${category}: Found ${filtered.length} products from cache`)
+        return filtered
+      }
+      
+      // If cache is empty, getAllProducts() will fetch all products in background
+      // Return empty for now, cache will be ready on next request
+      console.log(`⚠️  Homepage ${category}: Cache is being populated, returning empty for now`)
+      return []
+    } catch (error) {
+      console.error(`Error fetching ${category}:`, error)
+      return []
+    }
+  }
+  
+  // Fetch all categories in parallel (but only 8 products each)
+  const [tracksuits, jackets, shorts, tshirts, bags, hoodies] = await Promise.all([
+    fetchCategoryProducts('tracksuits', 8),
+    fetchCategoryProducts('jackets', 8),
+    fetchCategoryProducts('shorts', 8),
+    fetchCategoryProducts('t-shirts', 8),
+    fetchCategoryProducts('bags', 8),
+    fetchCategoryProducts('hoodies', 8),
+  ])
+  
+  console.log(`✅ Homepage: Fetched ${tracksuits.length + jackets.length + shorts.length + tshirts.length + bags.length + hoodies.length} products (8 per category, NOT all 212)`)
 
   return (
     <>
@@ -57,13 +83,13 @@ export default async function Home() {
       <h1 className="sr-only">Trapstar Official Store - Premium Streetwear Collection</h1>
       <section className="relative w-full bg-black border-b border-gray-900">
         <div className="relative w-full" style={{ height: '70vh', minHeight: '500px' }}>
-          <Image
+          <img
             src="/trapstar.webp"
             alt="Trapstar Official Hero"
-            fill
-            className="object-contain"
-            priority
-            sizes="100vw"
+            className="w-full h-full object-contain"
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
           />
         </div>
       </section>

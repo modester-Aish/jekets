@@ -1,11 +1,10 @@
-import { getAllProducts } from '@/lib/products'
 import ProductGrid from '@/components/ProductGrid'
 import Pagination from '@/components/Pagination'
 import type { Metadata } from 'next'
 
-// Force dynamic rendering - always fetch fresh data from WooCommerce
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+// Use ISR (Incremental Static Regeneration) - pages are cached and revalidated every hour
+// This provides fast page loads while keeping data fresh
+export const revalidate = 3600 // Revalidate every hour (3600 seconds)
 
 export const metadata: Metadata = {
   title: 'Shop All Trapstar Products | Complete Collection | trapstarofficial.store',
@@ -33,26 +32,16 @@ interface StorePageProps {
 }
 
 export default async function StorePage({ searchParams }: StorePageProps) {
-  // Fetch all products ONCE (same as homepage) - uses cache
-  const allProducts = await getAllProducts()
-  
-  // Pagination logic
+  // OPTIMIZED: Fetch only current page products (not all products)
+  // This makes store page load much faster - only fetches 12 products per page
   const currentPage = parseInt(searchParams.page || '1')
   const perPage = 12
-  const totalProducts = allProducts.length
-  const totalPages = Math.ceil(totalProducts / perPage)
-  const startIndex = (currentPage - 1) * perPage
-  const endIndex = startIndex + perPage
-  const products = allProducts.slice(startIndex, endIndex)
   
-  const pagination = {
-    page: currentPage,
-    perPage,
-    totalProducts,
-    totalPages,
-    hasNextPage: currentPage < totalPages,
-    hasPrevPage: currentPage > 1
-  }
+  // Fetch only the current page products
+  const { getPaginatedProducts } = await import('@/lib/products')
+  const result = await getPaginatedProducts(currentPage, perPage)
+  const products = result.products
+  const pagination = result.pagination
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">

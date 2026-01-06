@@ -213,7 +213,7 @@ function importProduct(product) {
       manage_stock: false,
       stock_status: (product.in_stock || '').toLowerCase().includes('in stock') ? 'instock' : 'outofstock',
       categories: [], // Will be set after category is created
-      images: product.image_url ? [{ src: product.image_url }] : [],
+      images: [], // Images will be loaded locally from public/products folder
       meta_data: [
         { key: '_original_category', value: product.category || '' }
       ]
@@ -257,6 +257,15 @@ function importProduct(product) {
           res.on('end', () => {
             if (res.statusCode >= 200 && res.statusCode < 300) {
               resolve(JSON.parse(data));
+            } else if (res.statusCode === 400) {
+              // Check if it's a duplicate SKU error
+              const errorData = JSON.parse(data);
+              if (errorData.code === 'woocommerce_rest_product_not_created' && errorData.message.includes('SKU')) {
+                console.log(`⚠️  SKU already exists, skipping: ${product.sku || product.name}`);
+                resolve(null); // Return null to indicate skip
+              } else {
+                reject(new Error(`Status ${res.statusCode}: ${data.substring(0, 200)}`));
+              }
             } else {
               reject(new Error(`Status ${res.statusCode}: ${data.substring(0, 200)}`));
             }
@@ -277,9 +286,9 @@ function importProduct(product) {
 
 // Main import function
 async function importAllProducts() {
-  const START_FROM_INDEX = 167; // Start from 168th product (0-indexed, so 167 = 168th)
+  const START_FROM_INDEX = 0; // Start from beginning
   
-  console.log(`🚀 Starting import to WooCommerce from product ${START_FROM_INDEX + 1}...\n`);
+  console.log(`🚀 Starting import to WooCommerce (without images - will use local images)...\n`);
   
   let importedCount = 0;
   let failedCount = 0;
@@ -287,17 +296,40 @@ async function importAllProducts() {
   for (let i = START_FROM_INDEX; i < products.length; i++) {
     const product = products[i];
     try {
-      await importProduct(product);
-      console.log(`✅ [${i + 1}/${products.length}] Imported: ${product.name}`);
-      importedCount++;
+      const result = await importProduct(product);
+      if (result === null) {
+        // Product was skipped (duplicate SKU)
+        console.log(`⏭️  [${i + 1}/${products.length}] Skipped: ${product.name} (duplicate SKU)`);
+      } else {
+        console.log(`✅ [${i + 1}/${products.length}] Imported: ${product.name}`);
+        importedCount++;
+      }
       
       // Delay to avoid rate limiting (2 seconds between imports)
       if (i < products.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
     } catch (error) {
-      console.error(`❌ [${i + 1}/${products.length}] Failed: ${product.name} - ${error.message}`);
-      failedCount++;
+      // Check if it's a timeout error - retry once
+      if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+        console.log(`⚠️  [${i + 1}/${products.length}] Timeout, retrying: ${product.name}`);
+        try {
+          await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+          const result = await importProduct(product);
+          if (result === null) {
+            console.log(`⏭️  [${i + 1}/${products.length}] Skipped: ${product.name} (duplicate SKU)`);
+          } else {
+            console.log(`✅ [${i + 1}/${products.length}] Imported (retry): ${product.name}`);
+            importedCount++;
+          }
+        } catch (retryError) {
+          console.error(`❌ [${i + 1}/${products.length}] Failed (retry): ${product.name} - ${retryError.message}`);
+          failedCount++;
+        }
+      } else {
+        console.error(`❌ [${i + 1}/${products.length}] Failed: ${product.name} - ${error.message}`);
+        failedCount++;
+      }
     }
   }
   

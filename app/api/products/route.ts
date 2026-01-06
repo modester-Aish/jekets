@@ -127,6 +127,17 @@ function convertToOurFormat(wooProducts: any[]) {
     const price = salePrice > 0 ? salePrice : regularPrice
     const discountPrice = salePrice > 0 && salePrice < regularPrice ? salePrice : null
     
+    // Use local image path based on SKU
+    let localImagePath = ''
+    if (product.sku && product.sku.trim()) {
+      const skuBase = product.sku.split('-')[0].trim()
+      localImagePath = `/products/${skuBase}.jpg`
+    } else {
+      const nameSlug = product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').substring(0, 50)
+      localImagePath = `/products/${nameSlug}.jpg`
+    }
+    const imagePath = localImagePath
+    
     return {
       id: product.id,
       title: product.name,
@@ -134,7 +145,7 @@ function convertToOurFormat(wooProducts: any[]) {
       category: category,
       price: regularPrice > 0 ? regularPrice : 299.99,
       discountPrice: discountPrice,
-      image: product.images && product.images.length > 0 ? product.images[0].src : '',
+      image: imagePath, // Use local image path
       description: product.description || product.short_description || product.name,
       brand: 'Trapstar',
       woocommerceId: product.id,
@@ -154,18 +165,18 @@ export async function GET(request: Request) {
   console.log(`🚀 API Route: Fetching products - Page: ${page}, PerPage: ${perPage}, Category: ${category || 'all'}`)
   
   try {
-    // CRITICAL: Check cache FIRST before any fetch
-    // Use getAllProducts which handles cache properly
-    const { getAllProducts } = await import('@/lib/products')
-    const allCachedProducts = await getAllProducts()
+    // OPTIMIZED: Check cache first, but if cache miss, fetch ONLY the requested page
+    // This prevents fetching all products when only one page is needed
+    const cacheModule = await import('@/lib/cache')
+    const cachedProducts = cacheModule.getCachedProducts()
     
-    if (allCachedProducts && allCachedProducts.length > 0) {
-      // We have cached products - use them
-      console.log(`💾 Using cached products from getAllProducts (${allCachedProducts.length} products) - NO FETCH`)
+    if (cachedProducts && cachedProducts.length > 0) {
+      // We have cached products - use them for filtering/pagination
+      console.log(`💾 Using cached products (${cachedProducts.length} products) - NO FETCH`)
       
       // If category filter is requested
       if (category) {
-        const filteredProducts = allCachedProducts.filter((p: any) => p.category === category)
+        const filteredProducts = cachedProducts.filter((p: any) => p.category === category)
         const startIndex = (page - 1) * perPage
         const endIndex = startIndex + perPage
         const paginatedProducts = filteredProducts.slice(startIndex, endIndex)
@@ -188,11 +199,11 @@ export async function GET(request: Request) {
           }
         })
       } else {
-        // No category filter - paginate all products
+        // No category filter - paginate all products from cache
         const startIndex = (page - 1) * perPage
         const endIndex = startIndex + perPage
-        const paginatedProducts = allCachedProducts.slice(startIndex, endIndex)
-        const totalProducts = allCachedProducts.length
+        const paginatedProducts = cachedProducts.slice(startIndex, endIndex)
+        const totalProducts = cachedProducts.length
         const totalPages = Math.ceil(totalProducts / perPage)
         
         return NextResponse.json({
@@ -213,177 +224,25 @@ export async function GET(request: Request) {
       }
     }
     
-    // If we reach here, cache was empty (shouldn't happen if cache is working)
-    // Fallback to direct fetch (but this should rarely happen)
-    console.warn('⚠️  Cache was empty, falling back to direct fetch (this should be rare)')
+    // Cache miss - return empty (cache will be populated by getAllProducts())
+    // NO DIRECT FETCH - only cache is used
+    console.log(`⚠️  Cache miss - returning empty. Cache will be populated by getAllProducts() on first request.`)
     
-    // If category filter is requested, we need to fetch all and filter
-    if (category) {
-      let allProducts: any[] = []
-      
-      // Cache miss - fetch all products from WooCommerce
-      console.log(`📥 Cache miss - Fetching all products for category filter...`)
-      let currentPage = 1
-      let totalPages = 1
-      
-      do {
-        console.log(`📥 Fetching page ${currentPage} for category filter...`)
-        const result = await fetchProductsFromWooCommerce(currentPage, 100)
-        allProducts = allProducts.concat(result.products)
-        totalPages = result.totalPages
-        currentPage++
-      } while (currentPage <= totalPages)
-      
-      // Convert and cache all products
-      const convertedAll = convertToOurFormat(allProducts)
-      const cacheModule = await import('@/lib/cache')
-      cacheModule.saveProductsToCache(convertedAll)
-      
-      // Filter by category (now using converted format)
-      const filteredProducts = convertedAll.filter((product: any) => product.category === category)
-      
-      // Apply pagination to filtered results
-      const startIndex = (page - 1) * perPage
-      const endIndex = startIndex + perPage
-      const paginatedProducts = filteredProducts.slice(startIndex, endIndex)
-      const totalProducts = filteredProducts.length
-      const totalPagesFiltered = Math.ceil(totalProducts / perPage)
-      
-      return NextResponse.json({
-        products: paginatedProducts,
-        pagination: {
-          page,
-          perPage,
-          totalProducts,
-          totalPages: totalPagesFiltered,
-          hasNextPage: page < totalPagesFiltered,
-          hasPrevPage: page > 1
-        }
-      }, {
-        headers: {
-          'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400'
-        }
-      })
-    } else {
-      // For non-category requests, check cache first
-      const cacheModule = await import('@/lib/cache')
-      const cachedAllProducts = cacheModule.getCachedProducts()
-      
-      if (cachedAllProducts && cachedAllProducts.length > 0) {
-        // Use cached products and paginate
-        console.log(`💾 Using cached products for pagination (${cachedAllProducts.length} products)`)
-        const startIndex = (page - 1) * perPage
-        const endIndex = startIndex + perPage
-        const paginatedProducts = cachedAllProducts.slice(startIndex, endIndex)
-        const totalProducts = cachedAllProducts.length
-        const totalPages = Math.ceil(totalProducts / perPage)
-        
-        return NextResponse.json({
-          products: paginatedProducts,
-          pagination: {
-            page,
-            perPage,
-            totalProducts,
-            totalPages,
-            hasNextPage: page < totalPages,
-            hasPrevPage: page > 1
-          }
-        }, {
-          headers: {
-            'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400'
-          }
-        })
+    return NextResponse.json({
+      products: [],
+      pagination: {
+        page,
+        perPage,
+        totalProducts: 0,
+        totalPages: 0,
+        hasNextPage: false,
+        hasPrevPage: false
       }
-      
-      // Cache miss - fetch ALL products from WooCommerce and cache them
-      // This ensures we have all products cached for future requests
-      console.log(`📥 Cache miss - Fetching ALL products from WooCommerce to cache...`)
-      
-      // First, try to get all products using getAllProducts (which handles caching)
-      const { getAllProducts } = await import('@/lib/products')
-      const allProducts = await getAllProducts()
-      
-      if (allProducts && allProducts.length > 0) {
-        // Use cached products and paginate
-        console.log(`💾 Using fetched products for pagination (${allProducts.length} products)`)
-        const startIndex = (page - 1) * perPage
-        const endIndex = startIndex + perPage
-        const paginatedProducts = allProducts.slice(startIndex, endIndex)
-        const totalProducts = allProducts.length
-        const totalPages = Math.ceil(totalProducts / perPage)
-        
-        return NextResponse.json({
-          products: paginatedProducts,
-          pagination: {
-            page,
-            perPage,
-            totalProducts,
-            totalPages,
-            hasNextPage: page < totalPages,
-            hasPrevPage: page > 1
-          }
-        }, {
-          headers: {
-            'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400'
-          }
-        })
+    }, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300'
       }
-      
-      // Fallback: fetch only requested page if getAllProducts fails
-      console.log(`📥 Fallback: Fetching page ${page} from WooCommerce...`)
-      const result = await fetchProductsFromWooCommerce(page, perPage)
-      
-      if (result.products.length === 0) {
-        console.warn('⚠️  No products fetched! Returning empty array.')
-        return NextResponse.json({
-          products: [],
-          pagination: {
-            page,
-            perPage,
-            totalProducts: 0,
-            totalPages: 0,
-            hasNextPage: false,
-            hasPrevPage: false
-          }
-        }, {
-          headers: {
-            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0'
-          }
-        })
-      }
-      
-      const convertedProducts = convertToOurFormat(result.products)
-      console.log(`✅ Converted products: ${convertedProducts.length}`)
-      
-      // If this is page 1, try to cache all products for future requests
-      if (page === 1 && result.totalPages > 1) {
-        // Use getAllProducts to fetch and cache all products in background
-        // This will cache all products for future requests
-        import('@/lib/products').then(({ getAllProducts }) => {
-          getAllProducts().catch(err => {
-            console.warn('⚠️  Background cache fetch failed:', err.message)
-          })
-        }).catch(() => {
-          // Ignore errors in background cache
-        })
-      }
-      
-      return NextResponse.json({
-        products: convertedProducts,
-        pagination: {
-          page,
-          perPage,
-          totalProducts: result.totalProducts,
-          totalPages: result.totalPages,
-          hasNextPage: page < result.totalPages,
-          hasPrevPage: page > 1
-        }
-      }, {
-        headers: {
-          'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400'
-        }
-      })
-    }
+    })
   } catch (error: any) {
     // Log all errors for debugging
     console.error('❌ Error fetching from WooCommerce:', error.message || error)

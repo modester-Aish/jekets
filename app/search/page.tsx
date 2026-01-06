@@ -15,14 +15,27 @@ function SearchContent() {
     async function fetchAndSearch() {
       if (query) {
         try {
-          const response = await fetch('/api/products')
-          const allProducts = await response.json()
-          const results = allProducts.filter((product: Product) =>
-            product.title.toLowerCase().includes(query.toLowerCase())
-          )
+          // OPTIMIZED: Use search endpoint or fetch with pagination
+          // For now, use cached products from client-side cache
+          const results = searchProductsSync(query)
           setProducts(results)
+          
+          // If no results in cache, try fetching first page and searching
+          if (results.length === 0) {
+            try {
+              const response = await fetch('/api/products?page=1&per_page=100')
+              const data = await response.json()
+              const fetchedProducts = data.products || []
+              const searchResults = fetchedProducts.filter((product: Product) =>
+                product.title.toLowerCase().includes(query.toLowerCase())
+              )
+              setProducts(searchResults)
+            } catch (error) {
+              console.error('Error fetching products:', error)
+            }
+          }
         } catch (error) {
-          console.error('Error fetching products:', error)
+          console.error('Error searching products:', error)
           // Fallback to sync search
           const results = searchProductsSync(query)
           setProducts(results)

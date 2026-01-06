@@ -20,21 +20,12 @@ interface ProductCardProps {
   product: Product
 }
 
-export default function ProductCard({ product }: ProductCardProps) {
+export default function ProductCard({ product, priority = false }: ProductCardProps) {
   const [currency, setCurrency] = useState('USD')
   const [countryCode, setCountryCode] = useState('US')
 
   // Listen for currency changes
   useEffect(() => {
-    const saved = localStorage.getItem('selectedCountry')
-    if (saved) {
-      setCountryCode(saved)
-      const country = require('@/lib/currency').COUNTRIES.find((c: any) => c.code === saved)
-      if (country) {
-        setCurrency(country.currency)
-      }
-    }
-
     const handleCurrencyChange = (e: CustomEvent) => {
       setCurrency(e.detail.currency)
       setCountryCode(e.detail.countryCode)
@@ -68,19 +59,34 @@ export default function ProductCard({ product }: ProductCardProps) {
           </div>
         )}
 
-        {/* Product Image */}
+        {/* Product Image - Using regular img tag to avoid Next.js optimization timeout */}
         <div className="relative w-full aspect-square bg-gray-800 overflow-hidden">
-          <img
-            src={product.image || ''}
-            alt={product.title}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-            loading="lazy"
-            onError={(e) => {
-              console.error('Image failed to load:', product.image);
-              // Show placeholder instead of hiding
-              e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="400"%3E%3Crect fill="%23333" width="400" height="400"/%3E%3Ctext fill="%23999" font-family="sans-serif" font-size="14" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3ENo Image%3C/text%3E%3C/svg%3E';
-            }}
-          />
+          {product.image && product.image.trim() !== '' ? (
+            <img
+              src={product.image}
+              alt={product.title}
+              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+              loading={priority ? "eager" : "lazy"}
+              decoding="async"
+              fetchPriority={priority ? "high" : "auto"}
+              onError={(e) => {
+                console.warn('Local image failed to load:', product.image, 'for product:', product.title)
+                // Try to load original WooCommerce image as fallback
+                const target = e.target as HTMLImageElement
+                // If local image fails, try to get original URL from product data
+                // For now, just show placeholder
+                target.style.display = 'none'
+                const placeholder = target.parentElement?.querySelector('.image-placeholder') as HTMLElement
+                if (placeholder) {
+                  placeholder.style.display = 'flex'
+                }
+              }}
+            />
+          ) : null}
+          {/* Placeholder that shows when image fails or doesn't exist */}
+          <div className={`image-placeholder w-full h-full bg-gray-800 flex items-center justify-center absolute inset-0 ${product.image && product.image.trim() !== '' ? 'hidden' : ''}`}>
+            <span className="text-gray-600 text-sm">No Image</span>
+          </div>
         </div>
 
         {/* Product Info */}

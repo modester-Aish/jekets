@@ -20,16 +20,6 @@ export default function PriceDisplay({
   const [countryCode, setCountryCode] = useState('US')
 
   useEffect(() => {
-    const saved = localStorage.getItem('selectedCountry')
-    if (saved) {
-      setCountryCode(saved)
-      const { COUNTRIES } = require('@/lib/currency')
-      const country = COUNTRIES.find((c: any) => c.code === saved)
-      if (country) {
-        setCurrency(country.currency)
-      }
-    }
-
     const handleCurrencyChange = (e: CustomEvent) => {
       setCurrency(e.detail.currency)
       setCountryCode(e.detail.countryCode)

@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import { useState, useEffect } from 'react'
 import { COUNTRIES, getCurrencyInfo } from '@/lib/currency'
@@ -11,28 +11,97 @@ export default function CurrencySelector({ onCurrencyChange }: CurrencySelectorP
   const [isOpen, setIsOpen] = useState(false)
   const [selectedCountry, setSelectedCountry] = useState<string>('US')
 
-  // Load saved country from localStorage
+  // Always detect country from IP (no cache)
   useEffect(() => {
-    const saved = localStorage.getItem('selectedCountry')
-    if (saved && COUNTRIES.find(c => c.code === saved)) {
-      setSelectedCountry(saved)
-    }
+    detectCountryFromIP()
   }, [])
+  
+  // Detect country from IP address - try multiple APIs
+  const detectCountryFromIP = async () => {
+    try {
+      let detectedCountry = 'US'
+      
+      // Try multiple client-side APIs
+      const apis = [
+        { url: 'https://ipapi.co/json/', key: 'country_code' },
+        { url: 'https://ip-api.com/json/?fields=status,countryCode', key: 'countryCode' },
+        { url: 'https://geojs.io/geo.json', key: 'country' },
+        { url: 'https://api.country.is', key: 'country' }
+      ]
+      
+      for (const api of apis) {
+        try {
+          console.log(`ðŸ” Trying ${api.url}...`)
+          const response = await fetch(api.url, {
+            headers: { 'Accept': 'application/json' }
+          })
+          
+          if (response.ok) {
+            const data = await response.json()
+            const country = data[api.key]
+            
+            if (country && country.length === 2) {
+              detectedCountry = country.toUpperCase()
+              console.log(`âœ… Country detected: ${detectedCountry}`)
+              break
+            }
+          }
+        } catch (e) {
+          continue
+        }
+      }
+      
+      // Fallback: Try server-side API
+      if (detectedCountry === 'US') {
+        try {
+          const response = await fetch('/api/detect-country')
+          const data = await response.json()
+          if (data.country && data.country !== 'US') {
+            detectedCountry = data.country
+            console.log('âœ… Country detected (server):', detectedCountry)
+          }
+        } catch (e) {
+          console.log('Server-side failed')
+        }
+      }
+      
+      // Set currency based on detected country
+      const country = COUNTRIES.find(c => c.code === detectedCountry)
+      if (country) {
+        setSelectedCountry(detectedCountry)
+        window.dispatchEvent(new CustomEvent('currencyChanged', { 
+          detail: { currency: country.currency, countryCode: detectedCountry } 
+        }))
+        if (onCurrencyChange) {
+          onCurrencyChange(country.currency, detectedCountry)
+        }
+      } else {
+        setSelectedCountry('US')
+        const defaultCountry = COUNTRIES[0]
+        window.dispatchEvent(new CustomEvent('currencyChanged', { 
+          detail: { currency: defaultCountry.currency, countryCode: 'US' } 
+        }))
+      }
+    } catch (error) {
+      console.error('Error:', error)
+      setSelectedCountry('US')
+      const defaultCountry = COUNTRIES[0]
+      window.dispatchEvent(new CustomEvent('currencyChanged', { 
+        detail: { currency: defaultCountry.currency, countryCode: 'US' } 
+      }))
+    }
+  }
 
   const currentCountry = COUNTRIES.find(c => c.code === selectedCountry) || COUNTRIES[0]
   const currencyInfo = getCurrencyInfo(selectedCountry)
 
   const handleCountrySelect = (countryCode: string) => {
     setSelectedCountry(countryCode)
-    localStorage.setItem('selectedCountry', countryCode)
     setIsOpen(false)
-    
     const country = COUNTRIES.find(c => c.code === countryCode) || COUNTRIES[0]
     if (onCurrencyChange) {
       onCurrencyChange(country.currency, countryCode)
     }
-    
-    // Trigger page refresh to update prices
     window.dispatchEvent(new CustomEvent('currencyChanged', { 
       detail: { currency: country.currency, countryCode } 
     }))
@@ -59,13 +128,10 @@ export default function CurrencySelector({ onCurrencyChange }: CurrencySelectorP
 
       {isOpen && (
         <>
-          {/* Backdrop */}
           <div 
             className="fixed inset-0 z-40" 
             onClick={() => setIsOpen(false)}
           />
-          
-          {/* Dropdown */}
           <div className="absolute right-0 mt-2 w-64 bg-black border border-gray-800 rounded-lg shadow-xl z-50 max-h-96 overflow-y-auto">
             <div className="py-2">
               <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-800">
@@ -105,4 +171,3 @@ export default function CurrencySelector({ onCurrencyChange }: CurrencySelectorP
     </div>
   )
 }
-

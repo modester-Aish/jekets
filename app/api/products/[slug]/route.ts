@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAllProducts } from '@/lib/products'
+import { getProductBySlug } from '@/lib/products'
 
 // GET single product by slug
 export async function GET(
@@ -9,11 +9,8 @@ export async function GET(
   try {
     const slug = params.slug
     
-    // Fetch all products (uses cache)
-    const allProducts = await getAllProducts()
-    
-    // Find product by slug
-    const product = allProducts.find(p => p.slug === slug)
+    // Use getProductBySlug which handles cache and direct fetch
+    const product = await getProductBySlug(slug)
     
     if (!product) {
       return NextResponse.json(

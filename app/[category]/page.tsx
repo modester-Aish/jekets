@@ -7,9 +7,9 @@ import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import Link from 'next/link'
 
-// Force dynamic rendering - always fetch fresh data from WooCommerce
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+// Use ISR (Incremental Static Regeneration) - pages are cached and revalidated every hour
+// This provides fast page loads while keeping data fresh
+export const revalidate = 3600 // Revalidate every hour (3600 seconds)
 
 interface CategoryPageProps {
   params: {
@@ -42,9 +42,6 @@ const categoryDescriptions: Record<string, string> = {
 export async function generateMetadata({ params }: CategoryPageProps): Promise<Metadata> {
   const slug = params.category
   
-  // Fetch all products once for metadata (prevents multiple requests)
-  const allProducts = await getAllProducts()
-  
   // Check if it's a valid category
   if (validCategories.includes(slug)) {
     const categoryName = slug
@@ -52,15 +49,18 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ')
 
-    const products = allProducts.filter(p => p.category === slug)
+    // OPTIMIZED: Fetch only first page to get count (not all products)
+    const { getPaginatedProducts } = await import('@/lib/products')
+    const result = await getPaginatedProducts(1, 12, slug)
+    const productCount = result.pagination.totalProducts
     const description = categoryDescriptions[slug] || `Shop premium ${categoryName.toLowerCase()} from Trapstar Official. Quality streetwear with bold designs.`
 
     return {
-      title: `Trapstar ${categoryName} Collection | ${products.length} Products | trapstarofficial.store`,
-      description: `${description} Browse ${products.length} premium ${categoryName.toLowerCase()} from Trapstar Official. Free shipping available.`,
+      title: `Trapstar ${categoryName} Collection | ${productCount} Products | trapstarofficial.store`,
+      description: `${description} Browse ${productCount} premium ${categoryName.toLowerCase()} from Trapstar Official. Free shipping available.`,
       keywords: `Trapstar ${categoryName}, ${slug}, streetwear, ${categoryName.toLowerCase()}, trapstarofficial.store`,
       openGraph: {
-        title: `Trapstar ${categoryName} Collection | ${products.length} Products`,
+        title: `Trapstar ${categoryName} Collection | ${productCount} Products`,
         description: description,
         url: `https://trapstarofficial.store/${slug}`,
         siteName: 'Trapstar Official',
@@ -77,8 +77,9 @@ export async function generateMetadata({ params }: CategoryPageProps): Promise<M
     }
   }
 
-  // Check if it's a product
-  const product = allProducts.find(p => p.slug === slug)
+  // Check if it's a product - fetch only this product (optimized)
+  const { getProductBySlug } = await import('@/lib/products')
+  const product = await getProductBySlug(slug)
   if (product) {
     const categoryName = product.category
       .split('-')
@@ -126,27 +127,18 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   const currentPage = parseInt(searchParams.page || '1')
   const perPage = 12
 
-  // Fetch all products ONCE (same as homepage) - uses cache
-  // This is needed for both category pages and product pages
-  const allProducts = await getAllProducts()
-  
-  // Debug: Log if products are empty
-  if (allProducts.length === 0) {
-    console.warn(`⚠️  No products found. Slug: ${slug}`)
-    console.warn(`⚠️  This might be due to WooCommerce API being unavailable (502 error). Check WooCommerce server status.`)
-  }
-
   // Check if it's a valid category
   if (validCategories.includes(slug)) {
-    // Filter by category
-    const categoryProducts = allProducts.filter(p => p.category === slug)
+    // OPTIMIZED: Fetch only this category's products (not all products)
+    // This makes category pages load much faster
+    const { getPaginatedProducts } = await import('@/lib/products')
+    const result = await getPaginatedProducts(currentPage, perPage, slug)
+    const categoryProducts = result.products
+    const totalProducts = result.pagination.totalProducts
+    const totalPages = result.pagination.totalPages
     
-    // Pagination logic
-    const totalProducts = categoryProducts.length
-    const totalPages = Math.ceil(totalProducts / perPage)
-    const startIndex = (currentPage - 1) * perPage
-    const endIndex = startIndex + perPage
-    const trapstarProducts = categoryProducts.slice(startIndex, endIndex)
+    // Products are already paginated from getPaginatedProducts
+    const trapstarProducts = categoryProducts
     
     const pagination = {
       page: currentPage,
@@ -228,8 +220,9 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     )
   }
 
-  // Check if it's a product
-  const product = allProducts.find(p => p.slug === slug)
+  // Check if it's a product - fetch only this product (optimized)
+  const { getProductBySlug, getProductsByCategory } = await import('@/lib/products')
+  const product = await getProductBySlug(slug)
   if (product) {
     const discountPercent = product.discountPrice && product.price && product.price > 0
       ? Math.round(((product.price - product.discountPrice) / product.price) * 100)
@@ -239,9 +232,10 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
     const displayDiscountPrice = product.discountPrice || null
     const itemsSold = 5 + (product.id % 25)
     const peopleWatching = 3 + (product.id % 18)
-    // Use already fetched products instead of another call
-    const relatedProducts = allProducts
-      .filter(p => p.category === product.category && p.id !== product.id)
+    // Fetch only related products from same category (optimized)
+    const categoryProducts = await getProductsByCategory(product.category)
+    const relatedProducts = categoryProducts
+      .filter(p => p.id !== product.id)
       .slice(0, 8)
     const categoryName = product.category
       .split('-')
@@ -433,7 +427,7 @@ export default async function CategoryPage({ params, searchParams }: CategoryPag
   }
 
   // Not a category or product
-  console.warn(`❌ Page not found - Slug: ${slug}, Valid categories: ${validCategories.join(', ')}, Products count: ${allProducts.length}`)
+  console.warn(`❌ Page not found - Slug: ${slug}, Valid categories: ${validCategories.join(', ')}`)
   notFound()
 }
 

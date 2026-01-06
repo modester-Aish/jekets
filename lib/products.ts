@@ -51,8 +51,8 @@ async function fetchProductsFromWooCommerceDirect(): Promise<Product[]> {
     const apiUrl = new URL(apiPath, baseUrl)
     
     // Log the actual URL being called for debugging
-    console.log(`🔗 WooCommerce API URL: ${apiUrl.href}`)
-    console.log(`🔗 Hostname: ${apiUrl.hostname}, Path: ${apiUrl.pathname}`)
+    console.log(`ðŸ”— WooCommerce API URL: ${apiUrl.href}`)
+    console.log(`ðŸ”— Hostname: ${apiUrl.hostname}, Path: ${apiUrl.pathname}`)
     
     const options = {
       hostname: apiUrl.hostname,
@@ -92,10 +92,10 @@ async function fetchProductsFromWooCommerceDirect(): Promise<Product[]> {
               
               // Log for debugging
               if (pageNum === 1) {
-                console.log(`📦 WooCommerce API: Total=${totalProducts}, Pages=${totalPages}`)
-                console.log(`🔗 API URL: ${apiUrl.href}`)
+                console.log(`ðŸ“¦ WooCommerce API: Total=${totalProducts}, Pages=${totalPages}`)
+                console.log(`ðŸ”— API URL: ${apiUrl.href}`)
               }
-              console.log(`✅ Fetched page ${pageNum}/${totalPages}: ${products.length} products`)
+              console.log(`âœ… Fetched page ${pageNum}/${totalPages}: ${products.length} products`)
               
               if (pageNum < totalPages) {
                 fetchPage(pageNum + 1)
@@ -138,6 +138,16 @@ async function fetchProductsFromWooCommerceDirect(): Promise<Product[]> {
                   const price = salePrice > 0 ? salePrice : regularPrice
                   const discountPrice = salePrice > 0 && salePrice < regularPrice ? salePrice : null
                   
+                  // Use local image path based on SKU
+                  let localImagePath = ''
+                  if (product.sku && product.sku.trim()) {
+                    const skuBase = product.sku.split('-')[0].trim()
+                    localImagePath = `/products/${skuBase}.jpg`
+                  } else {
+                    const nameSlug = product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').substring(0, 50)
+                    localImagePath = `/products/${nameSlug}.jpg`
+                  }
+                  
                   return {
                     id: product.id,
                     title: product.name,
@@ -145,7 +155,7 @@ async function fetchProductsFromWooCommerceDirect(): Promise<Product[]> {
                     category: category,
                     price: regularPrice > 0 ? regularPrice : 299.99,
                     discountPrice: discountPrice,
-                    image: product.images && product.images.length > 0 ? product.images[0].src : '',
+                    image: localImagePath,
                     description: product.description || product.short_description || product.name,
                     brand: 'Trapstar',
                     woocommerceId: product.id,
@@ -154,7 +164,7 @@ async function fetchProductsFromWooCommerceDirect(): Promise<Product[]> {
                   }
                 })
                 
-                console.log(`✅ Successfully converted ${converted.length} products from WooCommerce`)
+                console.log(`âœ… Successfully converted ${converted.length} products from WooCommerce`)
                 resolve(converted)
               }
             } catch (error) {
@@ -163,14 +173,14 @@ async function fetchProductsFromWooCommerceDirect(): Promise<Product[]> {
           } else {
             // Handle 502 Bad Gateway and other server errors
             if (res.statusCode === 502 || res.statusCode === 503 || res.statusCode === 504) {
-              console.error(`❌ WooCommerce Server Error ${res.statusCode} on page ${pageNum}`)
-              console.error(`❌ URL: ${apiUrl.href}`)
-              console.error(`❌ Response: ${data.substring(0, 500)}`)
+              console.error(`âŒ WooCommerce Server Error ${res.statusCode} on page ${pageNum}`)
+              console.error(`âŒ URL: ${apiUrl.href}`)
+              console.error(`âŒ Response: ${data.substring(0, 500)}`)
               reject(new Error(`WooCommerce server error ${res.statusCode}: Server is temporarily unavailable. This usually means the WooCommerce server is down or overloaded.`))
             } else {
-              console.error(`❌ WooCommerce API Error ${res.statusCode} on page ${pageNum}`)
-              console.error(`❌ URL: ${apiUrl.href}`)
-              console.error(`❌ Response: ${data.substring(0, 500)}`)
+              console.error(`âŒ WooCommerce API Error ${res.statusCode} on page ${pageNum}`)
+              console.error(`âŒ URL: ${apiUrl.href}`)
+              console.error(`âŒ Response: ${data.substring(0, 500)}`)
               reject(new Error(`Status ${res.statusCode}: ${data.substring(0, 200)}`))
             }
           }
@@ -178,12 +188,12 @@ async function fetchProductsFromWooCommerceDirect(): Promise<Product[]> {
       })
       
       req.on('error', (error: any) => {
-        console.error(`❌ Request error on page ${pageNum}:`, error.message)
+        console.error(`âŒ Request error on page ${pageNum}:`, error.message)
         reject(error)
       })
       
       req.on('timeout', () => {
-        console.error(`❌ Request timeout on page ${pageNum}`)
+        console.error(`âŒ Request timeout on page ${pageNum}`)
         req.destroy()
         reject(new Error('Request timeout'))
       })
@@ -208,7 +218,7 @@ export async function getAllProducts(): Promise<Product[]> {
   // Check if we have a recent cache (within same request)
   const now = Date.now()
   if (productsCache && (now - productsCache.timestamp) < CACHE_TTL) {
-    console.log(`♻️  Using request-level cached products (${productsCache.products.length} products)`)
+    console.log(`â™»ï¸  Using request-level cached products (${productsCache.products.length} products)`)
     return productsCache.products
   }
 
@@ -220,7 +230,7 @@ export async function getAllProducts(): Promise<Product[]> {
       if (cacheFuncs) {
         const cachedProducts = cacheFuncs.getCachedProducts()
         if (cachedProducts && cachedProducts.length > 0) {
-          console.log(`💾 Using cached products (${cachedProducts.length} products) - NO FETCH, cache valid until webhook or 1 hour`)
+          console.log(`ðŸ’¾ Using cached products (${cachedProducts.length} products) - NO FETCH, cache valid until webhook or 1 hour`)
           productsCache = { products: cachedProducts, timestamp: now }
           return cachedProducts
         }
@@ -228,7 +238,7 @@ export async function getAllProducts(): Promise<Product[]> {
 
       // Cache miss - check if fetch is already in progress
       if (fetchInProgress) {
-        console.log(`⏳ Fetch already in progress, waiting for it to complete...`)
+        console.log(`â³ Fetch already in progress, waiting for it to complete...`)
         try {
           const products = await fetchInProgress
           // After fetch completes, check cache again (might have been saved by the fetch)
@@ -236,7 +246,7 @@ export async function getAllProducts(): Promise<Product[]> {
           if (cacheFuncs) {
             const freshCache = cacheFuncs.getCachedProducts()
             if (freshCache && freshCache.length > 0) {
-              console.log(`✅ Using products from completed fetch (${freshCache.length} products)`)
+              console.log(`âœ… Using products from completed fetch (${freshCache.length} products)`)
               productsCache = { products: freshCache, timestamp: now }
               return freshCache
             }
@@ -249,7 +259,7 @@ export async function getAllProducts(): Promise<Product[]> {
           if (cacheFuncs) {
             const fallbackCache = cacheFuncs.getCachedProducts()
             if (fallbackCache && fallbackCache.length > 0) {
-              console.log(`⚠️  Fetch failed, using cached products (${fallbackCache.length} products)`)
+              console.log(`âš ï¸  Fetch failed, using cached products (${fallbackCache.length} products)`)
               productsCache = { products: fallbackCache, timestamp: now }
               return fallbackCache
             }
@@ -259,7 +269,7 @@ export async function getAllProducts(): Promise<Product[]> {
       }
 
       // Cache miss and no fetch in progress - fetch from WooCommerce
-      console.log('🔄 Cache miss - Fetching products from WooCommerce (server-side)...')
+      console.log('ðŸ”„ Cache miss - Fetching products from WooCommerce (server-side)...')
       
       // Create fetch promise and store it in lock
       fetchInProgress = (async () => {
@@ -271,14 +281,14 @@ export async function getAllProducts(): Promise<Product[]> {
               setTimeout(() => reject(new Error('Timeout')), 60000) // 60 second timeout
             )
           ])
-          console.log(`✅ Successfully fetched ${products.length} products from WooCommerce`)
+          console.log(`âœ… Successfully fetched ${products.length} products from WooCommerce`)
           
           // Save to persistent cache only if fetch was successful
           if (products && products.length > 0) {
             const cacheFuncs = await getCacheFunctions()
             if (cacheFuncs) {
               cacheFuncs.saveProductsToCache(products)
-              console.log(`💾 Products saved to cache - will use cached data for next 1 hour or until webhook invalidates`)
+              console.log(`ðŸ’¾ Products saved to cache - will use cached data for next 1 hour or until webhook invalidates`)
             }
           }
           
@@ -301,12 +311,12 @@ export async function getAllProducts(): Promise<Product[]> {
         
         // If fetch fails with 502/503/504, check extended cache
         if (fetchError.message?.includes('502') || fetchError.message?.includes('503') || fetchError.message?.includes('504')) {
-          console.warn('⚠️  WooCommerce server error detected, checking extended cache...')
+          console.warn('âš ï¸  WooCommerce server error detected, checking extended cache...')
           const cacheFuncs = await getCacheFunctions()
           if (cacheFuncs) {
             const extendedCache = cacheFuncs.getCachedProducts()
             if (extendedCache && extendedCache.length > 0) {
-              console.log(`✅ Using extended cache (${extendedCache.length} products) - WooCommerce server is down`)
+              console.log(`âœ… Using extended cache (${extendedCache.length} products) - WooCommerce server is down`)
               productsCache = { products: extendedCache, timestamp: now }
               return extendedCache
             }
@@ -317,7 +327,7 @@ export async function getAllProducts(): Promise<Product[]> {
       }
     } else {
       // Client-side: fetch from API route (API route will use its own cache)
-      console.log('🔄 Fetching products from API route (client-side)...')
+      console.log('ðŸ”„ Fetching products from API route (client-side)...')
       const response = await fetch('/api/products', {
         cache: 'default', // Allow browser cache
         next: { revalidate: 3600 }, // Revalidate every hour
@@ -327,7 +337,7 @@ export async function getAllProducts(): Promise<Product[]> {
         throw new Error(`API returned ${response.status}`)
       }
       const products = await response.json()
-      console.log(`✅ Successfully fetched ${products.length} products from API`)
+      console.log(`âœ… Successfully fetched ${products.length} products from API`)
       
       // Cache for this request
       productsCache = { products: products || [], timestamp: now }
@@ -335,7 +345,7 @@ export async function getAllProducts(): Promise<Product[]> {
     }
   } catch (error: any) {
     // Log error details for debugging
-    console.error('❌ Error fetching products from WooCommerce:', {
+    console.error('âŒ Error fetching products from WooCommerce:', {
       message: error?.message,
       type: error?.name,
       timeout: error?.message?.includes('Timeout'),
@@ -349,7 +359,7 @@ export async function getAllProducts(): Promise<Product[]> {
       if (cacheFuncs) {
         const cachedProducts = cacheFuncs.getCachedProducts()
         if (cachedProducts && cachedProducts.length > 0) {
-          console.log(`⚠️  WooCommerce fetch failed, but using cached products (${cachedProducts.length} products)`)
+          console.log(`âš ï¸  WooCommerce fetch failed, but using cached products (${cachedProducts.length} products)`)
           productsCache = { products: cachedProducts, timestamp: Date.now() }
           return cachedProducts
         }
@@ -357,7 +367,7 @@ export async function getAllProducts(): Promise<Product[]> {
     }
     
     // No cache available - return empty array
-    console.log('⚠️  WooCommerce fetch failed and no cache available. Returning empty array.')
+    console.log('âš ï¸  WooCommerce fetch failed and no cache available. Returning empty array.')
     return [] // Return empty instead of fallback to force WooCommerce data
   }
 }
@@ -516,15 +526,25 @@ async function fetchPaginatedProductsFromWooCommerce(page: number = 1, perPage: 
               const regularPrice = parseFloat(product.regular_price || '0')
               const salePrice = parseFloat(product.sale_price || '0')
               const discountPrice = salePrice > 0 && salePrice < regularPrice ? salePrice : null
-              
-              return {
+                  
+                  // Use local image path based on SKU
+                  let localImagePath = ''
+                  if (product.sku && product.sku.trim()) {
+                    const skuBase = product.sku.split('-')[0].trim()
+                    localImagePath = `/products/${skuBase}.jpg`
+                  } else {
+                    const nameSlug = product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '').substring(0, 50)
+                    localImagePath = `/products/${nameSlug}.jpg`
+                  }
+                  
+                  return {
                 id: product.id,
                 title: product.name,
                 slug: slug,
                 category: productCategory,
                 price: regularPrice > 0 ? regularPrice : 299.99,
                 discountPrice: discountPrice,
-                image: product.images && product.images.length > 0 ? product.images[0].src : '',
+                image: localImagePath,
                 description: product.description || product.short_description || product.name,
                 brand: 'Trapstar',
                 woocommerceId: product.id,
@@ -554,12 +574,12 @@ async function fetchPaginatedProductsFromWooCommerce(page: number = 1, perPage: 
     })
     
     req.on('error', (error: any) => {
-      console.error(`❌ Request error on page ${page}:`, error.message)
+      console.error(`âŒ Request error on page ${page}:`, error.message)
       reject(error)
     })
     
     req.on('timeout', () => {
-      console.error(`❌ Request timeout on page ${page}`)
+      console.error(`âŒ Request timeout on page ${page}`)
       req.destroy()
       reject(new Error('Request timeout'))
     })
@@ -600,7 +620,7 @@ export async function getPaginatedProducts(page: number = 1, perPage: number = 1
       return data
     }
   } catch (error: any) {
-    console.error('❌ Error fetching paginated products:', error.message)
+    console.error('âŒ Error fetching paginated products:', error.message)
     return {
       products: [],
       pagination: {
